@@ -1,0 +1,72 @@
+name: Publish androidapk newkeystore Maui
+
+on:
+   workflow_dispatch: # This triggers the workflow manually
+
+jobs:
+  build:
+
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+
+
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+    - name: Setup Project
+      run: |
+       wget -O "AppName.zip" "${{ secrets.PROJECTURL }}"
+       brew install sevenzip
+       7z x "AppName.zip"
+     
+    - name: Generate KeyStore
+      run: |
+         
+          keytool -genkeypair -v -keystore $(pwd)/AppMare.keystore  -keyalg RSA -keysize 2048 -validity 365000 -storepass "${{ secrets.KEYSTOREPASS }}" -alias ${{ secrets.KEYSTOREALIAS }} -dname "cn=Appmare"
+
+    - name: Setup Maui
+      run: dotnet workload install maui
+    - name: Publish App
+      run: |
+         dotnet publish -f net8.0-android -c Release -p:AndroidKeyStore=true -p:AndroidSigningKeyStore="$(pwd)/AppMare.keystore" -p:AndroidSigningKeyAlias="AppMare" -p:AndroidSigningKeyPass="${{ secrets.KEYSTOREPASS }}" -p:AndroidSigningStorePass="${{ secrets.KEYSTOREPASS }}"
+           
+    - name: Find and Copy AAB and APK
+      run: |
+     
+          echo "aab-path=$(find SampleApp/bin/Release/net8.0-android/publish -name "*Signed*.aab")"  >> $GITHUB_ENV
+          echo "apk-path=$(find SampleApp/bin/Release/net8.0-android/publish -name "*Signed*.apk")"  >> $GITHUB_ENV
+          echo -e "aliasName:${{ secrets.KEYSTOREALIAS }} \n KeyStorePassword: ${{ secrets.KEYSTOREPASS }}\n use This Keystore for any future publish" > KeyStoreCredentials.txt
+          echo "txt-path=KeyStoreCredentials.txt" >> $GITHUB_ENV
+          echo "key-path=AppMare.keystore" >> $GITHUB_ENV
+
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v3.1.0
+      with:
+        path: |
+          ${{ env.aab-path }}
+          ${{ env.apk-path }}
+    - name: Upload a Build Artifact2
+      uses: actions/upload-artifact@v3.1.0
+      with:
+        path: |
+           ${{ env.key-path }}
+          
+    - name: Upload a Build Artifact3
+      uses: actions/upload-artifact@v3.1.0
+      with:
+        path: |
+            ${{ env.txt-path }}
+    - name : Send Notifcation To User
+      run : |
+        curl --location --globoff ' https://api.onesignal.com/notifications' \
+        --header 'Content-Type: application/json' \
+        --header 'Authorization: Basic MTM0OGRiNzItNjU4NC00NTRhLTgxYTYtNTcwMmU1NGMzMGMz' \
+        --data '{
+         "app_id": "897e14e3-7897-4206-aa80-ee2fd35c7c0d",
+        "included_segments": ["e6b1376c-0fb0-4bf9-8cba-a92808bd8fba"],
+         "contents": {"en": "Succesful Build"}
+          }'    
+          
+
+        
