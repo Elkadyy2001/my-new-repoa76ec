@@ -19,7 +19,12 @@ jobs:
        wget -O "AppName.zip" "${{ secrets.PROJECTURL }}"
        brew install sevenzip
        7z x "AppName.zip"
-     
+       exit 1
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "The command failed. Notifying team..."
+        # Insert your notification script or command here
     - name: Generate KeyStore
       run: |
          
